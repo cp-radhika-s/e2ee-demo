@@ -5,8 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/material.dart';
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
 
-import 'buffered_sender_keystore.dart';
-
 class DistributionKeyGeneratorTest {
   static SenderKeyDistributionMessageWrapper? message = null;
 }
@@ -38,7 +36,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   String encryptedMessage = "";
   String decryptedMessage = "";
 
-  final senderKeystore = BufferedSenderKeystore();
+  final senderKeystore = InMemorySenderKeyStore();
   final deviceId = 1111;
   final spaceId = "111";
 
