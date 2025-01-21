@@ -5,10 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/material.dart';
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
 
+import 'buffered_sender_keystore.dart';
+
 class DistributionKeyGeneratorTest {
   static SenderKeyDistributionMessageWrapper? message = null;
-  static SignalProtocolAddress aliceAddress = SignalProtocolAddress('+00000000001', 1);
-  static SenderKeyName groupSenderKey = SenderKeyName('group-123', aliceAddress);
 }
 
 void main() {
@@ -34,66 +34,33 @@ class GroupChatScreen extends StatefulWidget {
 }
 
 class _GroupChatScreenState extends State<GroupChatScreen> {
-  final message = "Hello, group!";
+  String message = "Hello, group!";
   String encryptedMessage = "";
   String decryptedMessage = "";
-  final aliceStore = InMemorySenderKeyStore();
 
+  final senderKeystore = BufferedSenderKeystore();
+  final deviceId = 1111;
+  final spaceId = "111";
 
   @override
   void initState() {
     super.initState();
 
-    //_init();
-    _initializeServices();
+    _init();
+
+    // _workingSolution();
   }
+
+
+
   Future<void> _init() async {
-    final groupSessionAlice = GroupSessionBuilder(aliceStore);
-
     // Initialize GroupSessionBuilder for Alice and Bob
 
-    DistributionKeyGeneratorTest.message  =
-    await groupSessionAlice.create(DistributionKeyGeneratorTest.groupSenderKey);
-    // Bob processes Alice's group session
-  }
-
-
-  Future<void> _initializeServices() async {
-    // Initialize Alice's identity
-    const aliceAddress = SignalProtocolAddress('+00000000001', 1);
-    const groupSenderKey = SenderKeyName('group-123', aliceAddress);
-
-    final aliceStore = InMemorySenderKeyStore();
-
-    // Initialize Bob's identity
-    final bobStore = InMemorySenderKeyStore();
-
-    // Initialize GroupSessionBuilder for Alice and Bob
-    final groupSessionAlice = GroupSessionBuilder(aliceStore);
-    final groupSessionBob = GroupSessionBuilder(bobStore);
-
-    final senderKeyDistributionMessage =
-        await groupSessionAlice.create(groupSenderKey);
-
-    // Bob processes Alice's group session
-    groupSessionBob.process(groupSenderKey, senderKeyDistributionMessage);
-
-    // Create GroupCiphers
-    final aliceGroupCipher = GroupCipher(aliceStore, groupSenderKey);
-    final bobGroupCipher = GroupCipher(bobStore, groupSenderKey);
-
-    final ciphertext = await aliceGroupCipher.encrypt(Uint8List.fromList(message.codeUnits));
-    final encrypted =  String.fromCharCodes(ciphertext);
-
-    final plaintext =
-    await bobGroupCipher.decrypt(Uint8List.fromList(encrypted.codeUnits));
-    final decryptedByBob =  String.fromCharCodes(plaintext);
-
-
-    setState(() {
-      encryptedMessage = encrypted;
-      decryptedMessage = "Bob: $decryptedByBob";
-    });
+    final groupAddress = SignalProtocolAddress(spaceId, deviceId);
+    final sessionBuilder = GroupSessionBuilder(senderKeystore);
+    final senderKey = SenderKeyName(spaceId, groupAddress);
+    DistributionKeyGeneratorTest.message =
+        await sessionBuilder.create(senderKey);
   }
 
   @override
@@ -142,18 +109,17 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       encryptedMessage = "";
       decryptedMessage = "";
     });
-    // Create GroupCiphers
-    final distributionMessage = DistributionKeyGeneratorTest.message!;
-   // final aliceStore = InMemorySenderKeyStore();
+    final groupAddress = SignalProtocolAddress(spaceId, deviceId);
+    final senderKey = SenderKeyName(spaceId, groupAddress);
 
-    // // Bob processes Alice's group session
-    // await GroupSessionBuilder(aliceStore).process(
-    //     DistributionKeyGeneratorTest.groupSenderKey, distributionMessage);
+    await GroupSessionBuilder(senderKeystore)
+        .process(senderKey, DistributionKeyGeneratorTest.message!);
 
-    final aliceGroupCipher = GroupCipher(aliceStore, DistributionKeyGeneratorTest.groupSenderKey);
+    final aliceGroupCipher = GroupCipher(senderKeystore, senderKey);
 
-    final ciphertext = await aliceGroupCipher.encrypt(Uint8List.fromList(message.codeUnits));
-    final encrypted =  String.fromCharCodes(ciphertext);
+    final ciphertext =
+        await aliceGroupCipher.encrypt(Uint8List.fromList(message.codeUnits));
+    final encrypted = String.fromCharCodes(ciphertext);
 
     setState(() {
       encryptedMessage = encrypted;
@@ -161,30 +127,62 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   }
 
   void receive() async {
-    // Initialize Alice's identity
-    // const aliceAddress = SignalProtocolAddress('+00000000001', 1);
-    // const groupSenderKey = SenderKeyName('group-123', aliceAddress);
-    final bobStore = InMemorySenderKeyStore();
+    final groupAddress = SignalProtocolAddress(spaceId, deviceId);
+    final senderKey = SenderKeyName(spaceId, groupAddress);
 
+    await GroupSessionBuilder(senderKeystore)
+        .process(senderKey, DistributionKeyGeneratorTest.message!);
 
-    // Initialize GroupSessionBuilder for Alice and Bob
-    final groupSessionBob = GroupSessionBuilder(bobStore);
-    final distributionMessage = DistributionKeyGeneratorTest.message!;
+    final aliceGroupCipher = GroupCipher(senderKeystore, senderKey);
 
-    // Bob processes Alice's group session
-    await groupSessionBob.process(
-        DistributionKeyGeneratorTest.groupSenderKey, distributionMessage!);
-
-    // Create GroupCiphers
-    final bobGroupCipher = GroupCipher(bobStore, DistributionKeyGeneratorTest.groupSenderKey);
-
-    final plaintext =
-    await bobGroupCipher.decrypt(Uint8List.fromList(encryptedMessage.codeUnits));
-    final decryptedByBob =  String.fromCharCodes(plaintext);
-
+    final plaintext = await aliceGroupCipher
+        .decrypt(Uint8List.fromList(encryptedMessage.codeUnits));
+    final decryptedByBob = String.fromCharCodes(plaintext);
 
     setState(() {
       decryptedMessage = "Bob: $decryptedByBob";
     });
   }
+
+  Future<void> _workingSolution() async {
+    // Initialize Alice's identity
+    const aliceAddress = SignalProtocolAddress('+00000000001', 1);
+    const groupSenderKey = SenderKeyName('group-123', aliceAddress);
+
+    final aliceStore = InMemorySenderKeyStore();
+
+    // Initialize Bob's identity
+    final bobStore = InMemorySenderKeyStore();
+
+    // Initialize GroupSessionBuilder for Alice and Bob
+    final groupSessionAlice = GroupSessionBuilder(aliceStore);
+    final groupSessionBob = GroupSessionBuilder(bobStore);
+
+    final senderKeyDistributionMessage =
+    await groupSessionAlice.create(groupSenderKey);
+
+    // Bob processes Alice's group session
+    groupSessionBob.process(groupSenderKey, senderKeyDistributionMessage);
+
+    // Create GroupCiphers
+    final aliceGroupCipher = GroupCipher(aliceStore, groupSenderKey);
+    final bobGroupCipher = GroupCipher(bobStore, groupSenderKey);
+
+    final ciphertext =
+    await aliceGroupCipher.encrypt(Uint8List.fromList(message.codeUnits));
+    final encrypted = String.fromCharCodes(ciphertext);
+
+    final plaintext =
+    await bobGroupCipher.decrypt(Uint8List.fromList(encrypted.codeUnits));
+    final decryptedByBob = String.fromCharCodes(plaintext);
+
+    setState(() {
+      encryptedMessage = encrypted;
+      decryptedMessage = "Bob: $decryptedByBob";
+    });
+  }
+
 }
+
+
+
